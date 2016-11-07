@@ -5,4 +5,4 @@ copyright: username-is-already-taken2
 copyright_email: digitalgaz@hotmail.com
 license: All Rights Reserved
 summary: An InSpec Compliance Profile to audit windows scheduled tasks
-version: 0.1.0
+version: 0.2.0

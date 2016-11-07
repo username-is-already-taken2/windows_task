@@ -1,5 +1,6 @@
 # encoding: utf-8
 # author: Gary Bright @username-is-already-taken2
+# author: Chris Beard @cdbeard2016
 class WindowsTasks < Inspec.resource(1)
   name 'windows_task'
   desc 'Use the windows_task InSpec audit resource to test task schedules on Microsoft Windows.'
@@ -15,44 +16,67 @@ class WindowsTasks < Inspec.resource(1)
     describe windows_task('\\Microsoft\\Windows\\Defrag\\ScheduledDefrag') do
       it { should exist }
     end
+
+    describe windows_task('\\Microsoft\\Windows\\AppID\\PolicyConverter') do
+      its('logon_mode') { should eq 'Interactive/Background' }
+      its('last_result') { should eq '1' }
+      its('task_to_run') { should cmp '%Windir%\\system32\\appidpolicyconverter.exe' }
+      its('run_as_user') { should eq 'LOCAL SERVICE' }
+    end
   "
 
   def initialize(taskuri)
     @taskuri = taskuri
     @cache = nil
+
     # verify that this resource is only supported on Windows
     return skip_resource 'The `windows_task` resource is not supported on your OS.' unless inspec.os.windows?
   end
 
-  # returns true if the task exists
   def exists?
     return true unless info.nil? || info[:uri].nil?
   end
 
-  # state 3 = Ready
-  # state 4 = Running
-  # def used to determine if the task is enabled
+  # rubocop:disable Style/WordArray
   def enabled?
-    return false if info.nil? || info[:uri].nil?
-    info[:state] == ('Ready' || 'Running' || 3 || 4)
+    return false if info.nil? || info[:state].nil?
+    ['Ready', 'Running'].include?(info[:state])
   end
 
-  # state 1 = Disabled
-  # def used to determine if the task is disabled
   def disabled?
-    return false if info.nil? || info[:uri].nil?
-    info[:state] == ('Disabled' || 1)
+    return false if info.nil? || info[:state].nil?
+    info[:scheduled_task_state] == 'Disabled' || info[:state] == 'Disabled'
   end
 
-  # returns the task details
+  def logon_mode
+    info[:logon_mode]
+  end
+
+  def last_result
+    info[:last_result]
+  end
+
+  def task_to_run
+    info[:task_to_run].to_s.strip
+  end
+
+  def run_as_user
+    info[:run_as_user]
+  end
+
+  def type
+    info[:type] unless info.nil?
+  end
+
   def info # rubocop:disable Metrics/MethodLength
     return @cache unless @cache.nil?
     # PowerShell v5 has Get-ScheduledTask cmdlet,
     # _using something with backward support to v3_
-    # script = "Get-ScheduledTask | ? { $_.URI -eq '#{@taskuri}' } | Select-Object URI,State | ConvertTo-Json"
+    # script = "Get-ScheduledTask | ? { $_.URI -eq '#{@taskuri}' } | Select-Object URI,@{N='State';E={$_.State.ToString()}} | ConvertTo-Json"
 
     # Using schtasks as suggested by @modille but aligning property names to match cmdlet to future proof.
-    script = "schtasks /query /fo csv /tn '#{@taskuri}' | ConvertFrom-Csv | Select @{N='URI';E={$_.TaskName}},@{N='State';E={$_.Status}} | ConvertTo-Json"
+    script = "schtasks /query /v /fo csv /tn '#{@taskuri}' | ConvertFrom-Csv | Select @{N='URI';E={$_.TaskName}},@{N='State';E={$_.Status.ToString()}},'Logon Mode','Last Result','Task To Run','Run As User','Scheduled Task State' | ConvertTo-Json -Compress"
+
     cmd = inspec.powershell(script)
 
     begin
@@ -64,6 +88,11 @@ class WindowsTasks < Inspec.resource(1)
     @cache = {
       uri: params['URI'],
       state: params['State'],
+      logon_mode: params['Logon Mode'],
+      last_result: params['Last Result'],
+      task_to_run: params['Task To Run'],
+      run_as_user: params['Run As User'],
+      scheduled_task_state: params['Scheduled Task State'],
       type: 'windows-task'
     }
   end
