@@ -1,0 +1,8 @@
+name: windows_task
+title: InSpec Profile to Audit Windows Scheduled Tasks
+maintainer: username-is-already-taken2
+copyright: username-is-already-taken2
+copyright_email: digitalgaz@hotmail.com
+license: All Rights Reserved
+summary: An InSpec Compliance Profile to audit windows scheduled tasks
+version: 0.1.0
